@@ -1,0 +1,162 @@
+apiVersion: apiextensions.k8s.io/v1beta1
+kind: CustomResourceDefinition
+metadata:
+  name: mxjobs.kubeflow.org
+spec:
+  group: kubeflow.org
+  version: v1beta1
+  scope: Namespaced
+  names:
+    kind: MXJob
+    singular: mxjob
+    plural: mxjobs
+  validation:
+    openAPIV3Schema:
+      properties:
+        spec:
+          properties:
+            mxReplicaSpecs:
+              properties:
+                # The validation works when the configuration contains
+                # `Worker`, `Server`, `Scheduler`,
+                # `TunerTracker`, `TunerServer`, `Tuner`,
+                # Otherwise it will not be validated.
+                Scheduler:
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 1
+                      maximum: 1
+                Worker:
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 1
+                Server:
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 1
+                TunerTracker:
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 1
+                      maximum: 1
+                TunerServer:
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 1
+                Tuner:
+                  properties:
+                    replicas:
+                      type: integer
+                      minimum: 1
+                      maximum: 1
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mxnet-operator
+  labels:
+    app: mxnet-operator
+  namespace: arena-system
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRole
+metadata:
+  name: mxnet-operator
+  labels:
+    app: mxnet-operator
+rules:
+- apiGroups:
+  - kubeflow.org
+  resources:
+  - mxjobs
+  verbs:
+  - '*'
+- apiGroups:
+  - apiextensions.k8s.io
+  resources:
+  - customresourcedefinitions
+  verbs:
+  - '*'
+- apiGroups:
+  - storage.k8s.io
+  resources:
+  - storageclasses
+  verbs:
+  - '*'
+- apiGroups:
+  - batch
+  resources:
+  - jobs
+  verbs:
+  - '*'
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - pods
+  - services
+  - endpoints
+  - persistentvolumeclaims
+  - events
+  verbs:
+  - '*'
+- apiGroups:
+  - apps
+  - extensions
+  resources:
+  - deployments
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1beta1
+kind: ClusterRoleBinding
+metadata:
+  name: mxnet-operator
+  namespace: arena-system
+  labels:
+    app: mxnet-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: mxnet-operator
+subjects:
+- kind: ServiceAccount
+  name: mxnet-operator
+  namespace: arena-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mxnet-operator
+  namespace: arena-system
+  labels:
+    app: mxnet-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mxnet-operator
+  template:
+    metadata:
+      labels:
+        app: mxnet-operator
+    spec:
+      serviceAccountName: mxnet-operator
+      containers:
+      - name: mxnet-operator
+        image: qinshixu/mxnet-operator:v1beta1
+        imagePullPolicy: Always
+        env:
+        - name: MY_POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: MY_POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
